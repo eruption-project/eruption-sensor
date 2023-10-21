@@ -1,6 +1,6 @@
 # Eruption Sensor
 
-Please download the `Eruption Sesnor` GNOME 4x shell extension from [extensions.gnome.org](https://extensions.gnome.org/extension//).
+Please download the `Eruption Sensor` GNOME 4x shell extension from [extensions.gnome.org](https://extensions.gnome.org/extension//).
 
 To install and enable the extension, please run the following commands in a terminal:
 
