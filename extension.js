@@ -24,35 +24,40 @@ import Atspi from 'gi://Atspi'
 
 import { Extension, gettext as _, ngettext, pgettext } from 'resource:///org/gnome/shell/extensions/extension.js';
 
-let XDG_RUNTIME_DIR = GLib.getenv('XDG_RUNTIME_DIR');
+let XDG_RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR");
 
 let focusWindowTracker;
 
 let file = Gio.File.new_for_path(`${XDG_RUNTIME_DIR}/eruption-sensor`);
-let pipe = file.append_to_async(0, 0, null, on_pipe_open);
+let pipe = null; // file.append_to_async(0, 0, null, on_pipe_open);
+
+let last_message = null;
 
 function send(msg) {
-    if (!pipe) {
-        console.error('[eruption] Sensor pipe is not available, trying to reopen...');
+    if (msg !== last_message) {
+        if (!pipe) {
+            console.warn("[eruption] sensor pipe is not available, trying to reopen...");
 
-        pipe = null;
-        pipe = file.append_to_async(0, 0, null, on_pipe_open);
+            pipe = null;
+            pipe = file.append_to_async(0, 0, null, on_pipe_open);
+        }
 
-        return;
-    }
+        try {
+            console.log(`[eruption] event: ${msg}`);
 
-    try {
-        pipe.write(msg, null);
-    } catch {
-        console.warn('[eruption] Sensor pipe closed, reopening...');
+            pipe.write(msg, null);
+            last_message = msg;
+        } catch {
+            console.warn("[eruption] sensor pipe closed, reopening...");
 
-        pipe = null;
-        file.append_to_async(0, 0, null, on_pipe_open);
+            pipe = null;
+            file.append_to_async(0, 0, null, on_pipe_open);
+        }
     }
 }
 
 function on_pipe_open(file, res) {
-    console.log('[eruption] Sensor pipe opened');
+    console.log("[eruption] sensor pipe opened");
 
     pipe = file.append_to_finish(res);
 }
@@ -67,18 +72,16 @@ export default class SensorExtension extends Extension {
     }
 
     _getFocusedWindowAndNotify() {
-        const focusedWindow = focusWindowTracker.focus_app?.get_windows()[0];
+        let focusedWindow = focusWindowTracker?.focus_app?.get_windows()[0];
 
         if (focusedWindow) {
-            const title = focusedWindow ? focusedWindow.get_title() : '';
-            const cls = focusedWindow ? focusedWindow.get_wm_class() : '';
-
-            console.log(`[eruption] Focused window: ${title}`);
+            let title = focusedWindow ? focusedWindow.get_title() : "";
+            let cls = focusedWindow ? focusedWindow.get_wm_class() : "";
 
             send(`{ "window_title": "${title}", "window_class": "${cls}" }\n`);
 
         } else {
-            console.error(`[eruption] Could not determine the currently focused window`);
+            console.warn(`[eruption] could not determine the currently focused window`);
         }
     }
 
@@ -90,34 +93,34 @@ export default class SensorExtension extends Extension {
         this._getFocusedWindowAndNotify();
     }
 
-    onAtspiEvent(event) {
+    onAtspiEvent(/* event */) {
         // AT-SPI notified us about a change of the focused window. This gives us the opportunity
         // to (re-)query the attributes of the focused window of the currently active application
 
         this._getFocusedWindowAndNotify();
 
-        // console.log('[eruption] Event: ' + event.type + ', ' + event.source.get_name() + ', ' + event.source.get_description() + ', ' + event.source.get_role_name());
+        // console.log("[eruption] event: " + event.type + ", " + event.source.get_name() + ", " + event.source.get_description() + ", " + event.source.get_role_name());
 
         // We even could add super fine-grained notifications in the future, like per-widget focus events
 
-        // const title = event?.source?.get_name() ? event.source.get_name() : '';
-        // const description = event?.source?.get_description() ? event.source.get_description() : '';
+        // const title = event?.source?.get_name() ? event.source.get_name() : "";
+        // const description = event?.source?.get_description() ? event.source.get_description() : "";
 
         // send(`{ "window_title": "${title}", "window_class": "${description}" }\n`);
     }
 
     enable() {
-        console.log(`[eruption] Enabling ${this.metadata.name}`);
+        console.log(`[eruption] enabling ${this.metadata.name}`);
 
         this.settings = this.getSettings("org.gnome.shell.extensions.eruption-sensor");
         this.settings.connect("changed", this._update.bind(this));
 
         focusWindowTracker = Shell.WindowTracker.get_default();
 
-        focusWindowTracker.connect('notify::focus-app', this.onFocusWindowChanged.bind(this));
+        focusWindowTracker.connect("notify::focus-app", this.onFocusWindowChanged.bind(this));
 
         // this does not seem to work since GNOME >44 ...
-        // focusWindowTracker.connect('notify::focus-window', this.onFocusWindowChanged.bind(this));
+        // focusWindowTracker.connect("notify::focus-window", this.onFocusWindowChanged.bind(this));
 
         // ... so we have to resort to the accessibility API to get fine-grained notifications
 
@@ -126,14 +129,14 @@ export default class SensorExtension extends Extension {
     }
 
     disable() {
-        console.log(`[eruption] Disabling ${this.metadata.name}`);
+        console.log(`[eruption] disabling ${this.metadata.name}`);
 
         // Disconnect signals and cleanup
-        this._atspiListener.deregister();
+        this._atspiListener.deregister("object:state-changed:focused");
         this._atspiListener = null;
 
-        focusWindowTracker.disconnect('notify::focus-app', this.onFocusWindowChanged);
-        // focusWindowTracker.disconnect('notify::focus-window', this.onFocusWindowChanged);
+        focusWindowTracker.disconnect("notify::focus-app");
+        // focusWindowTracker.disconnect("notify::focus-window", this.onFocusWindowChanged);
 
         focusWindowTracker = null;
 
@@ -141,13 +144,13 @@ export default class SensorExtension extends Extension {
     }
 
     reload() {
-        console.log(`[eruption] Reloading ${this.metadata.name}`);
+        console.log(`[eruption] reloading ${this.metadata.name}`);
 
         this.disable();
         this.enable();
     }
 
     _update() {
-        console.log(`[eruption] Updating settings ${this.metadata.name}`);
+        console.log(`[eruption] updating settings ${this.metadata.name}`);
     }
 }
