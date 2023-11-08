@@ -26,7 +26,6 @@ build:
 
 	gnome-extensions pack --force --extra-source=ui/prefs.ui \
 								  --podir=po \
-								  --schema=schemas/org.gnome.shell.extensions.eruption-sensor.gschema.xml \
 								  .
 
 	@echo "Completed. Now you can install the extension using 'make install'"

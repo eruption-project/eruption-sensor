@@ -19,26 +19,18 @@
 
 import GObject from 'gi://GObject';
 
-import Gdk from 'gi://Gdk?version=4.0';
-import Gtk from 'gi://Gtk?version=4.0';
+// import Gdk from 'gi://Gdk';
+import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 
 import { ExtensionPreferences, gettext as _, ngettext, pgettext } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 export default class SensorExtensionPreferences extends ExtensionPreferences {
-    constructor(metadata) {
-        super(metadata);
-
-        this.initTranslations(metadata.gettext_domain);
-    }
-
     fillPreferencesWindow(window) {
-        window._settings = this.getSettings();
-
         const page = new Adw.PreferencesPage();
         const group = new Adw.PreferencesGroup();
 
-        group.add(this.buildPrefsWidget());
+        group.add(this.buildPrefsWidget(window._settings));
         page.add(group);
 
         window.add(page);
@@ -47,35 +39,18 @@ export default class SensorExtensionPreferences extends ExtensionPreferences {
     buildPrefsWidget() {
         const builder = new Gtk.Builder();
 
-        builder.set_scope(new MyBuilderScope(this));
+        // builder.set_scope(new MyBuilderScope(this));
         builder.add_from_file(this.metadata.dir.get_path() + "/prefs.ui");
-
-        const provider = new Gtk.CssProvider();
-
-        provider.load_from_path(this.metadata.dir.get_path() + "/stylesheet.css");
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
-            provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-
-        const settings = this.getSettings("org.gnome.shell.extensions.eruption-sensor");
 
         return builder.get_object("main_prefs");
     }
 }
 
-const MyBuilderScope = GObject.registerClass(
+/* const MyBuilderScope = GObject.registerClass(
     {
         Implements: [Gtk.BuilderScope],
     },
     class MyBuilderScope extends GObject.Object {
-        constructor(extension) {
-            super();
-
-            this.settings = extension.getSettings("org.gnome.shell.extensions.eruption-sensor");
-        }
-
         vfunc_create_closure(_builder, handlerName, flags, connectObject) {
             if (flags & Gtk.BuilderClosureFlags.SWAPPED) {
                 throw new Error("Unsupported template signal flag 'swapped'");
@@ -88,4 +63,4 @@ const MyBuilderScope = GObject.registerClass(
             return this[handlerName].bind(connectObject || this);
         }
     },
-);
+); */

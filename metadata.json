@@ -1,12 +1,11 @@
 {
   "description": "Sensor extension for the Eruption Realtime RGB LED Driver for Linux",
   "name": "Eruption Sensor",
-  "settings-schema": "org.gnome.shell.extensions.eruption-sensor",
   "shell-version": [
     "45"
   ],
   "url": "https://github.com/eruption-project/eruption-sensor",
   "uuid": "eruption-sensor@x3n0m0rph59.org",
   "gettext-domain": "eruption-sensor@x3n0m0rph59.org",
-  "version": 5
+  "version": 6
 }
