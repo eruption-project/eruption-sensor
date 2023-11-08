@@ -20,7 +20,7 @@
 import Shell from 'gi://Shell';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import Atspi from 'gi://Atspi'
+// import Atspi from 'gi://Atspi'
 
 import { Extension, gettext as _, ngettext, pgettext } from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -38,7 +38,7 @@ export default class SensorExtension extends Extension {
         this.file = Gio.File.new_for_path(`${XDG_RUNTIME_DIR}/eruption-sensor`);
         this.pipe = this.file.append_to_async(0, 0, null, this.on_pipe_open.bind(this));
 
-        Atspi.init();
+        // Atspi.init();
     }
 
     send(msg) {
@@ -136,7 +136,7 @@ export default class SensorExtension extends Extension {
 
         this._onFocusWindowChangedHandler = this.focusWindowTracker.connect("notify::focus-app", this.onFocusWindowChanged.bind(this));
 
-        this._atspiListener = Atspi.EventListener.new(this.onAtspiEvent.bind(this));
+        // this._atspiListener = Atspi.EventListener.new(this.onAtspiEvent.bind(this));
 
         // this._atspiListener.register("focus");
         // this._atspiListener.register("object:state-changed:active");
@@ -150,7 +150,7 @@ export default class SensorExtension extends Extension {
         // this._atspiListener.deregister("object:state-changed:focused");
         // this._atspiListener.deregister("object:state-changed:showing");
 
-        this._atspiListener = null;
+        // this._atspiListener = null;
 
         this.focusWindowTracker?.disconnect(this._onFocusWindowChangedHandler, "notify::focus-app");
 
