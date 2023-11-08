@@ -30,23 +30,23 @@ export default class SensorExtension extends Extension {
     constructor(metadata) {
         super(metadata);
 
+        this.last_message = null;
+        this.pipe_opened = false;
+
         this.focusWindowTracker = null;
 
         this.file = Gio.File.new_for_path(`${XDG_RUNTIME_DIR}/eruption-sensor`);
-        this.pipe = null; // file.append_to_async(0, 0, null, on_pipe_open);
-
-        this.last_message = null;
+        this.pipe = this.file.append_to_async(0, 0, null, this.on_pipe_open.bind(this));
 
         Atspi.init();
     }
 
     send(msg) {
-        if (msg !== this.last_message) {
+        if (this.pipe_opened && msg !== this.last_message) {
             if (!this.pipe) {
-                console.info("[eruption-sensor] sensor pipe is not available, trying to reopen...");
+                console.error("[eruption-sensor] sensor pipe is not available, trying to open...");
 
-                this.pipe = null;
-                this.pipe = this.file.append_to_async(0, 0, null, this.on_pipe_open.bind(this));
+                this.update_pipe_status(false);
             }
 
             try {
@@ -55,31 +55,50 @@ export default class SensorExtension extends Extension {
                 this.pipe.write(msg, null);
                 this.last_message = msg;
             } catch {
-                console.info("[eruption-sensor] sensor pipe closed, reopening...");
-
-                this.pipe = null;
-                this.file.append_to_async(0, 0, null, this.on_pipe_open.bind(this));
+                this.update_pipe_status(false);
             }
         }
     }
 
     on_pipe_open(file, res) {
-        console.log("[eruption-sensor] sensor pipe opened");
-
-        this.pipe = this.file.append_to_finish(res);
+        try {
+            this.pipe = file.append_to_finish(res);
+            this.update_pipe_status(true);
+        } catch {
+            this.update_pipe_status(false);
+        }
     }
 
-    _getFocusedWindowAndNotify() {
-        let focusedWindow = this.focusWindowTracker?.focus_app?.get_windows()[0];
+    update_pipe_status(opened) {
+        this.pipe_opened = opened;
 
-        if (focusedWindow) {
+        if (opened) {
+            console.log("[eruption-sensor] sensor pipe has been opened");
+
+            this.start_tracking_windows();
+        } else {
+            console.log("[eruption-sensor] sensor pipe was closed");
+
+            this.stop_tracking_windows();
+            this.pipe = this.file.append_to_async(0, 0, null, this.on_pipe_open.bind(this));
+        }
+    }
+
+    getFocusedWindowAndNotify() {
+        try {
+            let focusedWindows = this.focusWindowTracker?.focus_app?.get_windows();
+            let focusedWindow = focusedWindows.find((element) => !(!element));
+
             let title = focusedWindow ? focusedWindow.get_title() : "";
             let cls = focusedWindow ? focusedWindow.get_wm_class() : "";
 
             this.send(`{ "window_title": "${title}", "window_class": "${cls}" }\n`);
 
-        } else {
-            console.warn(`[eruption-sensor] could not determine the currently focused window`);
+            return true;
+        } catch {
+            console.log(`[eruption-sensor] could not determine the currently focused window`);
+
+            return false;
         }
     }
 
@@ -88,23 +107,54 @@ export default class SensorExtension extends Extension {
         // NOTE: This will miss all events relating to sub-windows of the currently active application
         //       So we won't get notified if e.g. a browser tab has been changed
 
-        this._getFocusedWindowAndNotify();
+        this.getFocusedWindowAndNotify();
     }
 
-    onAtspiEvent(/* event */) {
+    onAtspiEvent(event) {
         // AT-SPI notified us about a change of the focused window. This gives us the opportunity
         // to (re-)query the attributes of the focused window of the currently active application
 
-        this._getFocusedWindowAndNotify();
+        let title;
+        let description;
 
-        // console.log("[eruption-sensor] event: " + event.type + ", " + event.source.get_name() + ", " + event.source.get_description() + ", " + event.source.get_role_name());
+        try {
+            title = event?.source?.get_name() ? event.source.get_name() : "";
+            description = event?.source?.get_description() ? event.source.get_description() : "";
 
-        // We even could add super fine-grained notifications in the future, like per-widget focus events
+            if ((!title && !description) || (title === "" && description === ""))
+                // we could not determine the focused windows attributes, fall back to the WindowTracker
+                this.getFocusedWindowAndNotify();
+            else
+                this.send(`{ "window_title": "${title}", "window_class": "${description}" }\n`);
+        } catch {
+            this.getFocusedWindowAndNotify();
+        }
+    }
 
-        // const title = event?.source?.get_name() ? event.source.get_name() : "";
-        // const description = event?.source?.get_description() ? event.source.get_description() : "";
+    start_tracking_windows() {
+        this.focusWindowTracker = Shell.WindowTracker.get_default();
 
-        // send(`{ "window_title": "${title}", "window_class": "${description}" }\n`);
+        this._onFocusWindowChangedHandler = this.focusWindowTracker.connect("notify::focus-app", this.onFocusWindowChanged.bind(this));
+
+        this._atspiListener = Atspi.EventListener.new(this.onAtspiEvent.bind(this));
+
+        // this._atspiListener.register("focus");
+        // this._atspiListener.register("object:state-changed:active");
+        // this._atspiListener.register("object:state-changed:focused");
+        // this._atspiListener.register("object:state-changed:showing");
+    }
+
+    stop_tracking_windows() {
+        // this._atspiListener.deregister("focus");
+        // this._atspiListener.deregister("object:state-changed:active");
+        // this._atspiListener.deregister("object:state-changed:focused");
+        // this._atspiListener.deregister("object:state-changed:showing");
+
+        this._atspiListener = null;
+
+        this.focusWindowTracker?.disconnect(this._onFocusWindowChangedHandler, "notify::focus-app");
+
+        this.focusWindowTracker = null;
     }
 
     enable() {
@@ -113,23 +163,13 @@ export default class SensorExtension extends Extension {
         // this.settings = this.getSettings();
         // this.settings.connect("changed", this._update.bind(this));
 
-        this.focusWindowTracker = Shell.WindowTracker.get_default();
-        this._onNotifyFocusAppListener = this.focusWindowTracker.connect("notify::focus-app", this.onFocusWindowChanged.bind(this));
-
-        this._atspiListener = Atspi.EventListener.new(this.onAtspiEvent.bind(this));
-        this._onStateChangedListener = this._atspiListener.register("object:state-changed:focused");
+        // we start tracking windows only when the pipe is opened by another process
     }
 
     disable() {
         console.log(`[eruption-sensor] disabling ${this.metadata.name}`);
 
-        // Disconnect signals and cleanup
-        this._atspiListener.deregister("object:state-changed:focused", this._onStateChangedListener);
-        this._atspiListener = null;
-
-        this.focusWindowTracker.disconnect("notify::focus-app", this._onNotifyFocusAppListener);
-
-        this.focusWindowTracker = null;
+        this.stop_tracking_windows();
 
         // this.settings = null;
     }
